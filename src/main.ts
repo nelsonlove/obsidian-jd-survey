@@ -8,7 +8,7 @@ import { candidatesFromPaths } from "./obsidian/notes";
 import { readSurveyState, stalenessReason } from "./staleness";
 import { walk } from "./walker";
 import { resolveFsPath } from "./pathResolver";
-import { buildStatusTable, buildSummaryLine, spliceMarkers, StatusRow } from "./dashboard";
+import { buildStatusTable, spliceMarkers, StatusRow } from "./dashboard";
 import { formatDate } from "./date";
 import { JdSurveySettingTab } from "./settings";
 import type { RequestFn } from "./anthropic";
@@ -70,6 +70,7 @@ export default class JdSurveyPlugin extends Plugin {
   async surveyAllStale(): Promise<void> {
     if (!this.guard()) return;
     const cands = candidatesFromPaths(this.app.vault.getMarkdownFiles().map((f) => f.path));
+    const keys = deriveKeys(this.settings.frontmatterPrefix);
     let changed = 0;
     for (const c of cands) {
       const file = this.app.vault.getAbstractFileByPath(c.relPath) as TFile | null;
@@ -78,7 +79,6 @@ export default class JdSurveyPlugin extends Plugin {
       const body = await this.app.vault.read(file);
       const res = await surveyNote(c.relPath, fm, body, { ...this.settings, vaultRoot: this.vaultRoot() }, this.deps());
       if (res.status !== "surveyed") continue;
-      const keys = deriveKeys(this.settings.frontmatterPrefix);
       await writeBody(this.app, file, res.section!);
       await stampFrontmatter(this.app, file, (f) => applySurveyToFrontmatter(f, res.survey!, keys));
       changed += 1;

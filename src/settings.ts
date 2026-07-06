@@ -26,6 +26,15 @@ export class JdSurveySettingTab extends PluginSettingTab {
       .addText((t) => t.setValue(s.dashboardMarkerEnd).onChange(async (v) => { s.dashboardMarkerEnd = v; await this.plugin.saveSettings(); }));
     new Setting(containerEl).setName("Generate prose (LLM)")
       .addToggle((t) => t.setValue(s.llmEnabled).onChange(async (v) => { s.llmEnabled = v; await this.plugin.saveSettings(); }));
+    new Setting(containerEl)
+      .setName("Keep if accurate (coming soon)")
+      .setDesc("Preserve existing prose when still accurate. Not yet implemented.")
+      .addToggle((t) =>
+        t.setValue(s.keepIfAccurate).setDisabled(true).onChange(async (v) => {
+          s.keepIfAccurate = v;
+          await this.plugin.saveSettings();
+        }),
+      );
     new Setting(containerEl).setName("Anthropic model")
       .addText((t) => t.setValue(s.anthropicModel).onChange(async (v) => { s.anthropicModel = v.trim(); await this.plugin.saveSettings(); }));
     new Setting(containerEl).setName("Anthropic API key").setDesc("Stored in the plugin's data.json (which Syncs).")
