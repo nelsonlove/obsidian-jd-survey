@@ -16,6 +16,10 @@ describe("expandTilde", () => {
     expect(expandTilde("~/Documents", "/Users/n")).toBe("/Users/n/Documents");
     expect(expandTilde("/abs", "/Users/n")).toBe("/abs");
   });
+
+  it("expandTilde('~', home) returns the home dir", () => {
+    expect(expandTilde("~", "/Users/n")).toBe("/Users/n");
+  });
 });
 
 describe("resolveFsPath", () => {
@@ -79,6 +83,18 @@ describe("resolveFsPath", () => {
   it("rejects a relative survey-filepath that escapes fsRoot", () => {
     const fs = makeFakeFs({});
     const r = resolveFsPath("A/26.10 X.md", { "survey-filepath": "../escape" }, cfg(), keys, fs);
+    expect(r.kind).toBe("no-mapping");
+  });
+
+  it("survey-target: vault on a non-folder note returns no-mapping", () => {
+    const fs = makeFakeFs({ "/vault/A/26.10 X": { "note.md": "file" } });
+    const r = resolveFsPath("A/26.10 X.md", { "survey-target": "vault" }, cfg(), keys, fs);
+    expect(r.kind).toBe("no-mapping");
+  });
+
+  it("NUL byte in survey-filepath returns no-mapping", () => {
+    const fs = makeFakeFs({});
+    const r = resolveFsPath("A/26.10 X.md", { "survey-filepath": "bad\0path" }, cfg(), keys, fs);
     expect(r.kind).toBe("no-mapping");
   });
 });
