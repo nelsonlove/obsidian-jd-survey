@@ -16,30 +16,38 @@ export function renderWithProse(callout: string, prose: string): string {
   return `${SECTION_HEADING}\n\n${callout}\n\n${prose.trimEnd()}\n`;
 }
 
-function escapeRe(s: string): string {
-  return s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+function findHeadingStart(body: string): number {
+  if (body.startsWith(SECTION_HEADING)) return 0;
+  const i = body.indexOf("\n" + SECTION_HEADING);
+  return i === -1 ? -1 : i + 1;
 }
 
-// Manual section matching using the known structure:
-// ## Heading\n\n...content...\n\n...prose...\n plus optional blank line
-// Matches the section including the trailing blank line if present (for proper idempotent replacement).
-const SECTION_RE_MANUAL = new RegExp(
-  `^${escapeRe(SECTION_HEADING)}\\n\\n[\\s\\S]*?\\n\\n[\\s\\S]+?\\n(?:\\n)?`,
-  "m",
-);
+function findNextHeadingStart(body: string, from: number): number {
+  const i = body.indexOf("\n## ", from);
+  return i === -1 ? -1 : i + 1;
+}
+
+export function matchSection(body: string): string | null {
+  const start = findHeadingStart(body);
+  if (start === -1) return null;
+  const from = start + SECTION_HEADING.length;
+  const next = findNextHeadingStart(body, from);
+  const end = next === -1 ? body.length : next;
+  return body.slice(start, end).replace(/\s+$/, "");
+}
 
 export function upsertSection(body: string, newSection: string): string {
   const normalized = newSection.trimEnd() + "\n\n";
-
-  // Try to match section using the known structure
-  const match = SECTION_RE_MANUAL.exec(body);
-  if (match) {
-    const sectionStart = match.index;
-    const sectionEnd = match.index + match[0].length;
-    return body.slice(0, sectionStart) + normalized + body.slice(sectionEnd);
+  const start = findHeadingStart(body);
+  if (start !== -1) {
+    const from = start + SECTION_HEADING.length;
+    const next = findNextHeadingStart(body, from);
+    const before = body.slice(0, start);
+    if (next === -1) {
+      return (before + normalized).trimEnd() + "\n";
+    }
+    return before + normalized + body.slice(next);
   }
-
-  // No section found. Insert after H1 or prepend.
   const h1 = /^# .+\n/m.exec(body);
   if (h1) {
     const idx = h1.index + h1[0].length;
@@ -47,9 +55,4 @@ export function upsertSection(body: string, newSection: string): string {
     return body.slice(0, idx) + "\n" + normalized + remainder;
   }
   return normalized + body.replace(/^\n+/, "");
-}
-
-export function matchSection(body: string): string | null {
-  const match = SECTION_RE_MANUAL.exec(body);
-  return match ? match[0] : null;
 }
