@@ -30,7 +30,8 @@ const exec: ExecFn = (bin, args, input, env) => new Promise((resolve) => {
   child.stdout?.on("data", (d) => { stdout += d.toString(); });
   child.stderr?.on("data", (d) => { stderr += d.toString(); });
   child.on("close", (code) => { clearTimeout(timer); resolve({ code, stdout, stderr }); });
-  if (input) { child.stdin?.write(input); child.stdin?.end(); }
+  if (input) child.stdin?.write(input);
+  child.stdin?.end();
 });
 
 export default class JdSurveyPlugin extends Plugin {

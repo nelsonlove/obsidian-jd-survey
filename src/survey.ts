@@ -41,7 +41,7 @@ export async function surveyNote(
   const callout = renderCallout(w.items, dateStr, depth, w.stubs);
 
   let prose: string | null = null;
-  if (cfg.llmEnabled) {
+  if (cfg.llmEnabled && cfg.proseProvider !== "skeleton") {
     const jdid = (fm["jd-id"] as string) || relPath.split("/").pop()!.split(" ")[0];
     const title = (fm["title"] as string) || path.posix.basename(relPath, ".md").split(" ").slice(1).join(" ");
     const tree = buildTree(res.fsPath, depth, deps.fs, res.skipPath ?? undefined);

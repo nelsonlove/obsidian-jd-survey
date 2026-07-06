@@ -65,6 +65,12 @@ describe("generateProseViaCli", () => {
     await generateProseViaCli("prompt", { ...baseCfg, claudeBinaryPath: "   " }, exec);
     expect(calls[0].bin).toBe("claude");
   });
+
+  it("returns null when exec throws", async () => {
+    const exec: ExecFn = async () => { throw new Error("boom"); };
+    const result = await generateProseViaCli("prompt", baseCfg, exec);
+    expect(result).toBeNull();
+  });
 });
 
 describe("claudeEnv", () => {
