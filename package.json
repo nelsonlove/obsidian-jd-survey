@@ -1,6 +1,6 @@
 {
   "name": "jd-survey",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Filesystem survey plugin for Obsidian (ports the 08.41 survey protocol).",
   "type": "module",
   "scripts": {

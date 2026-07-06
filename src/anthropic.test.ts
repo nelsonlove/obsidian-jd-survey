@@ -6,7 +6,8 @@ const cfg = (over: Partial<JdSurveyConfig> = {}): JdSurveyConfig => ({
   frontmatterPrefix: "survey", vaultRoot: "/v", fsRoot: "/d", defaultDepth: 2,
   dateFormat: "YYYY-MM-DD", stalenessThresholdDays: 180, dashboardNotePath: "d.md",
   dashboardMarkerBegin: "b", dashboardMarkerEnd: "e", llmEnabled: true,
-  anthropicApiKey: "sk-test", anthropicModel: "claude-haiku-4-5-20251001", keepIfAccurate: false, ...over,
+  anthropicApiKey: "sk-test", anthropicModel: "claude-haiku-4-5-20251001", keepIfAccurate: false,
+  proseProvider: "auto", claudeBinaryPath: "", ...over,
 });
 
 const ok = async () => ({ status: 200, json: { content: [{ type: "text", text: '  "Some prose."  ' }] }, text: "" });

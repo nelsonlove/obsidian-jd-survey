@@ -7,6 +7,13 @@ export type RequestFn = (opts: {
 const API_URL = "https://api.anthropic.com/v1/messages";
 const MAX_TOKENS = 1024;
 
+export function postProcessProse(text: string): string | null {
+  let out = (text ?? "").trim().replace(/^["']+|["']+$/g, "").trim();
+  if (!out) return null;
+  if (out.length > 5000) out = out.slice(0, 5000).trimEnd() + "…";
+  return out;
+}
+
 async function call(prompt: string, cfg: JdSurveyConfig, request: RequestFn): Promise<string | null> {
   if (!cfg.anthropicApiKey) return null;
   try {
@@ -26,10 +33,7 @@ async function call(prompt: string, cfg: JdSurveyConfig, request: RequestFn): Pr
     });
     if (res.status !== 200) return null;
     const block = res.json?.content?.find((b: any) => b.type === "text");
-    let out = (block?.text ?? "").trim().replace(/^["']+|["']+$/g, "").trim();
-    if (!out) return null;
-    if (out.length > 5000) out = out.slice(0, 5000).trimEnd() + "…";
-    return out;
+    return postProcessProse(block?.text ?? "");
   } catch {
     return null;
   }

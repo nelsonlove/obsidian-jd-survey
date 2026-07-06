@@ -8,7 +8,8 @@ const cfg = (over: Partial<JdSurveyConfig> = {}): JdSurveyConfig => ({
   frontmatterPrefix: "survey", vaultRoot: "/vault", fsRoot: "/docs",
   defaultDepth: 2, dateFormat: "YYYY-MM-DD", stalenessThresholdDays: 180,
   dashboardNotePath: "d.md", dashboardMarkerBegin: "<!--b-->", dashboardMarkerEnd: "<!--e-->",
-  llmEnabled: false, anthropicApiKey: "", anthropicModel: "m", keepIfAccurate: false, ...over,
+  llmEnabled: false, anthropicApiKey: "", anthropicModel: "m", keepIfAccurate: false,
+  proseProvider: "auto", claudeBinaryPath: "", ...over,
 });
 
 describe("expandTilde", () => {

@@ -26,6 +26,16 @@ export class JdSurveySettingTab extends PluginSettingTab {
       .addText((t) => t.setValue(s.dashboardMarkerEnd).onChange(async (v) => { s.dashboardMarkerEnd = v; await this.plugin.saveSettings(); }));
     new Setting(containerEl).setName("Generate prose (LLM)")
       .addToggle((t) => t.setValue(s.llmEnabled).onChange(async (v) => { s.llmEnabled = v; await this.plugin.saveSettings(); }));
+    new Setting(containerEl).setName("Prose provider").setDesc("auto = try the local `claude` CLI, then the Anthropic API, else skeleton.")
+      .addDropdown((d) => d
+        .addOption("auto", "auto")
+        .addOption("claude-cli", "claude-cli")
+        .addOption("api", "api")
+        .addOption("skeleton", "skeleton")
+        .setValue(s.proseProvider)
+        .onChange(async (v) => { s.proseProvider = v as typeof s.proseProvider; await this.plugin.saveSettings(); }));
+    new Setting(containerEl).setName("Claude binary path").setDesc("Optional absolute path to the `claude` binary; leave blank to search PATH (Homebrew/usr-local/.local/.claude are auto-added).")
+      .addText((t) => t.setPlaceholder("claude").setValue(s.claudeBinaryPath).onChange(async (v) => { s.claudeBinaryPath = v.trim(); await this.plugin.saveSettings(); }));
     new Setting(containerEl)
       .setName("Keep if accurate (coming soon)")
       .setDesc("Preserve existing prose when still accurate. Not yet implemented.")

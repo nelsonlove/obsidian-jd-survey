@@ -1,3 +1,5 @@
+export type ProseProvider = "auto" | "claude-cli" | "api" | "skeleton";
+
 export interface JdSurveyConfig {
   frontmatterPrefix: string;
   vaultRoot: string;            // absolute; filled from adapter.basePath at runtime
@@ -12,6 +14,8 @@ export interface JdSurveyConfig {
   anthropicApiKey: string;
   anthropicModel: string;
   keepIfAccurate: boolean;
+  proseProvider: ProseProvider;
+  claudeBinaryPath: string;
 }
 
 export const DEFAULT_CONFIG: Omit<JdSurveyConfig, "vaultRoot"> = {
@@ -27,6 +31,8 @@ export const DEFAULT_CONFIG: Omit<JdSurveyConfig, "vaultRoot"> = {
   anthropicApiKey: "",
   anthropicModel: "claude-haiku-4-5-20251001",
   keepIfAccurate: false,
+  proseProvider: "auto",
+  claudeBinaryPath: "",
 };
 
 export interface SurveyKeys {

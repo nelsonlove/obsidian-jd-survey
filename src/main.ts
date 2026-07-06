@@ -12,11 +12,26 @@ import { buildStatusTable, spliceMarkers, StatusRow } from "./dashboard";
 import { formatDate } from "./date";
 import { JdSurveySettingTab } from "./settings";
 import type { RequestFn } from "./anthropic";
+import type { ExecFn } from "./claudeCli";
 
 const request: RequestFn = async (opts) => {
   const r = await requestUrl({ url: opts.url, method: opts.method, headers: opts.headers, body: opts.body, throw: false });
   return { status: r.status, json: r.json, text: r.text };
 };
+
+const exec: ExecFn = (bin, args, input, env) => new Promise((resolve) => {
+  const cp = require("child_process") as typeof import("child_process");
+  let stdout = "", stderr = "";
+  let child: import("child_process").ChildProcess;
+  try { child = cp.spawn(bin, args, { env: env as NodeJS.ProcessEnv }); }
+  catch (e: any) { resolve({ code: null, stdout: "", stderr: String(e?.message ?? e), errorCode: e?.code }); return; }
+  const timer = setTimeout(() => child.kill(), 120000);
+  child.on("error", (e: any) => { clearTimeout(timer); resolve({ code: null, stdout, stderr: String(e?.message ?? e), errorCode: e?.code }); });
+  child.stdout?.on("data", (d) => { stdout += d.toString(); });
+  child.stderr?.on("data", (d) => { stderr += d.toString(); });
+  child.on("close", (code) => { clearTimeout(timer); resolve({ code, stdout, stderr }); });
+  if (input) { child.stdin?.write(input); child.stdin?.end(); }
+});
 
 export default class JdSurveyPlugin extends Plugin {
   settings!: JdSurveyConfig;
@@ -44,7 +59,7 @@ export default class JdSurveyPlugin extends Plugin {
     return (this.app.vault.adapter as any).basePath ?? "";
   }
   private deps() {
-    return { fs: new NodeFs(), today: new Date(), request };
+    return { fs: new NodeFs(), today: new Date(), request, exec };
   }
 
   private guard(): boolean {

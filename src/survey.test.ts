@@ -4,7 +4,7 @@ import { makeFakeFs } from "./fs";
 import { DEFAULT_CONFIG } from "./config";
 
 const cfg = { ...DEFAULT_CONFIG, vaultRoot: "/v", fsRoot: "/d", llmEnabled: false } as any;
-const deps = (fs: any) => ({ fs, today: new Date(2026, 6, 5), request: null });
+const deps = (fs: any) => ({ fs, today: new Date(2026, 6, 5), request: null, exec: null });
 
 describe("surveyNote", () => {
   it("skips on opt-out", async () => {

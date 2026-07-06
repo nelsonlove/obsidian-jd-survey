@@ -8,9 +8,11 @@ import { walk } from "./walker";
 import { formatDate } from "./date";
 import { renderCallout, renderSkeleton, renderWithProse } from "./renderer";
 import { buildTree, buildLlmPrompt } from "./prose";
-import { generateProse, RequestFn } from "./anthropic";
+import type { RequestFn } from "./anthropic";
+import { generateProseFrom } from "./proseSource";
+import type { ExecFn } from "./claudeCli";
 
-export interface SurveyDeps { fs: FsLike; today: Date; request: RequestFn | null; }
+export interface SurveyDeps { fs: FsLike; today: Date; request: RequestFn | null; exec: ExecFn | null; }
 export interface SurveyResult {
   status: "surveyed" | "skipped";
   reason: string;
@@ -39,12 +41,12 @@ export async function surveyNote(
   const callout = renderCallout(w.items, dateStr, depth, w.stubs);
 
   let prose: string | null = null;
-  if (cfg.llmEnabled && cfg.anthropicApiKey && deps.request) {
+  if (cfg.llmEnabled) {
     const jdid = (fm["jd-id"] as string) || relPath.split("/").pop()!.split(" ")[0];
     const title = (fm["title"] as string) || path.posix.basename(relPath, ".md").split(" ").slice(1).join(" ");
     const tree = buildTree(res.fsPath, depth, deps.fs, res.skipPath ?? undefined);
     const prompt = buildLlmPrompt({ jdid, title, fsPath: res.fsPath, count: w.items, depth, tree });
-    prose = await generateProse(prompt, cfg, deps.request);
+    prose = await generateProseFrom(prompt, cfg, { request: deps.request, exec: deps.exec });
   }
 
   const by: SurveyBy = prose ? "jd-survey-llm" : "jd-survey";
