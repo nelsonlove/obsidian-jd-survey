@@ -7,7 +7,7 @@ import { resolveFsPath } from "./pathResolver";
 import { walk } from "./walker";
 import { formatDate } from "./date";
 import { renderCallout, renderSkeleton, renderWithProse } from "./renderer";
-import { buildTree, buildLlmPrompt } from "./prose";
+import { buildTree, buildLlmPrompt, buildJudgePrompt, extractExistingProse, extractEmbeddedCount, COUNT_DRIFT_REWRITE_THRESHOLD } from "./prose";
 import type { RequestFn } from "./anthropic";
 import { generateProseFrom } from "./proseSource";
 import type { ExecFn } from "./claudeCli";
@@ -41,15 +41,44 @@ export async function surveyNote(
   const callout = renderCallout(w.items, dateStr, depth, w.stubs);
 
   let prose: string | null = null;
+  let keptExisting = false;
   if (cfg.llmEnabled && cfg.proseProvider !== "skeleton") {
     const jdid = (fm["jd-id"] as string) || relPath.split("/").pop()!.split(" ")[0];
     const title = (fm["title"] as string) || path.posix.basename(relPath, ".md").split(" ").slice(1).join(" ");
     const tree = buildTree(res.fsPath, depth, deps.fs, res.skipPath ?? undefined);
-    const prompt = buildLlmPrompt({ jdid, title, fsPath: res.fsPath, count: w.items, depth, tree });
-    prose = await generateProseFrom(prompt, cfg, { request: deps.request, exec: deps.exec });
+    const proseDeps = { request: deps.request, exec: deps.exec };
+
+    if (cfg.keepIfAccurate) {
+      const existing = extractExistingProse(body);
+      if (existing) {
+        let forceRewrite = false;
+        const embedded = extractEmbeddedCount(existing);
+        if (embedded !== null && embedded > 0) {
+          forceRewrite = Math.abs(embedded - w.items) / embedded >= COUNT_DRIFT_REWRITE_THRESHOLD;
+        }
+        if (!forceRewrite) {
+          const verdict = await generateProseFrom(
+            buildJudgePrompt({ jdid, title, count: w.items, existing, tree }), cfg, proseDeps);
+          if (verdict && verdict.trim().toUpperCase().startsWith("KEEP")) {
+            prose = existing;
+            keptExisting = true;
+          }
+        }
+      }
+    }
+
+    if (!keptExisting) {
+      const prompt = buildLlmPrompt({ jdid, title, fsPath: res.fsPath, count: w.items, depth, tree });
+      prose = await generateProseFrom(prompt, cfg, proseDeps);
+    }
   }
 
-  const by: SurveyBy = prose ? "jd-survey-llm" : "jd-survey";
+  let by: SurveyBy;
+  if (keptExisting) {
+    by = (obj["by"] as SurveyBy) || "human";   // preserve existing provenance
+  } else {
+    by = prose ? "jd-survey-llm" : "jd-survey";
+  }
   const section = prose ? renderWithProse(callout, prose) : renderSkeleton(callout);
   const survey: SurveyObject = { at: dateStr, items: w.items, depth, by, stubs: w.stubs };
   return { status: "surveyed", reason: "ok", by, section, survey };
