@@ -1,4 +1,5 @@
-import type { Frontmatter, SurveyKeys } from "./config";
+import type { Frontmatter } from "./types";
+import type { SurveyKeys } from "./config";
 import { parseDate, daysBetween } from "./date";
 
 export interface SurveyState {
