@@ -13,6 +13,8 @@ import { formatDate } from "./date";
 import { JdSurveySettingTab } from "./settings";
 import type { RequestFn } from "./anthropic";
 import type { ExecFn } from "./claudeCli";
+import { publishTools } from "vault-mcp-api";
+import { z } from "zod";
 
 const request: RequestFn = async (opts) => {
   const r = await requestUrl({ url: opts.url, method: opts.method, headers: opts.headers, body: opts.body, throw: false });
@@ -45,6 +47,24 @@ export default class JdSurveyPlugin extends Plugin {
     this.addCommand({ id: "survey-all-stale", name: "Survey all stale slots", callback: () => this.surveyAllStale() });
     this.addCommand({ id: "refresh-stale-table", name: "Refresh stale-surveys table", callback: () => this.refreshDashboard() });
     this.addCommand({ id: "migrate-has-filesystem", name: "Migrate has-filesystem", callback: () => this.migrateAll() });
+
+    // Publish an MCP tool through vault-mcp (no-op until vault-mcp is loaded).
+    this.register(
+      publishTools(this, [{
+        name: "survey_slot",
+        description:
+          "Survey a JD slot note's filesystem mirror: rewrite its Contents (Filesystem) section and stamp survey frontmatter. Returns { status, items?, by?, reason? }. Mutating.",
+        inputSchema: {
+          path: z.string().min(1).describe("Vault-relative path of the slot note, e.g. '00-09 System/05 Money/05.11 Secrets/05.11 Secrets.md'."),
+        },
+        readOnly: false,
+        handler: async ({ path }) => {
+          const file = this.app.vault.getAbstractFileByPath(String(path));
+          if (!(file instanceof TFile) || file.extension !== "md") throw new Error(`no markdown note at '${path}'`);
+          return this.surveyFile(file);
+        },
+      }])
+    );
   }
 
   async loadSettings(): Promise<void> {
@@ -68,19 +88,26 @@ export default class JdSurveyPlugin extends Plugin {
     return true;
   }
 
-  async surveyActive(): Promise<void> {
-    if (!this.guard()) return;
-    const file = this.app.workspace.getActiveFile();
-    if (!file || file.extension !== "md") { new Notice("jd-survey: no active markdown note"); return; }
+  /** Survey one slot note. Shared core of the command palette action and the published MCP tool. */
+  async surveyFile(file: TFile): Promise<{ status: string; reason?: string; items?: number; by?: string }> {
     const cache = this.app.metadataCache.getFileCache(file);
     const fm = { ...(cache?.frontmatter ?? {}) };
     const body = await this.app.vault.read(file);
     const res = await surveyNote(file.path, fm, body, { ...this.settings, vaultRoot: this.vaultRoot() }, this.deps());
-    if (res.status === "skipped") { new Notice(`jd-survey: skipped (${res.reason})`); return; }
+    if (res.status === "skipped") return { status: "skipped", reason: res.reason };
     const keys = deriveKeys(this.settings.frontmatterPrefix);
     await writeBody(this.app, file, res.section!);
     await stampFrontmatter(this.app, file, (f) => applySurveyToFrontmatter(f, res.survey!, keys));
-    new Notice(`jd-survey: ${res.survey!.items} items · ${res.by}`);
+    return { status: "surveyed", items: res.survey!.items, by: res.by };
+  }
+
+  async surveyActive(): Promise<void> {
+    if (!this.guard()) return;
+    const file = this.app.workspace.getActiveFile();
+    if (!file || file.extension !== "md") { new Notice("jd-survey: no active markdown note"); return; }
+    const r = await this.surveyFile(file);
+    if (r.status === "skipped") { new Notice(`jd-survey: skipped (${r.reason})`); return; }
+    new Notice(`jd-survey: ${r.items} items · ${r.by}`);
   }
 
   async surveyAllStale(): Promise<void> {
