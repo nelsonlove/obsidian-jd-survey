@@ -192,7 +192,10 @@ describe("surveyNote — keepIfAccurate", () => {
     expect(r.section).not.toContain("<!-- TODO: prose summary -->");
   });
 
-  it("skips judge and generation when proseProvider is skeleton", async () => {
+  // REWRITTEN (Fix 2): skeleton provider makes no new prose, but an existing
+  // jd-survey-llm section must NOT be clobbered to a TODO placeholder. Fix 2
+  // salvages the existing prose; the callout is refreshed but prose is kept.
+  it("skips judge/generation when provider is skeleton, keeping existing prose (Fix 2)", async () => {
     const existingProse = "2 files: tax PDFs from prior year.";
     const surveyFm = { at: "2026-01-01", items: 2, depth: 2, by: "jd-survey-llm", stubs: 0 };
     const fm = { "jd-id": "26.10", title: "X", survey: surveyFm } as any;
@@ -208,9 +211,9 @@ describe("surveyNote — keepIfAccurate", () => {
     };
     const r = await surveyNote("A/26.10 X.md", fm, body, skeletonCfg, { ...deps(fs), request: trackingRequest as any });
     expect(r.status).toBe("surveyed");
-    expect(r.by).toBe("jd-survey");
-    expect(r.section).toContain("## Contents (Filesystem)");
-    expect(r.section).toContain("<!-- TODO: prose summary -->");
+    expect(r.by).toBe("jd-survey-llm");                 // Fix 2: kept, not downgraded
+    expect(r.section).toContain(existingProse);         // existing prose salvaged
+    expect(r.section).not.toContain("<!-- TODO: prose summary -->"); // NOT skeleton
     expect(calls).toHaveLength(0);  // No provider calls at all
   });
 });
@@ -244,10 +247,15 @@ describe("provenance gate", () => {
   });
 });
 
-describe("provenance gate — no extractable prose", () => {
-  it("protected (claude-code) with skeleton-only section: does not call LLM, keeps provenance, emits skeleton", async () => {
-    const request = vi.fn(); const exec = vi.fn();
-    // Body has a Contents section but only the skeleton placeholder — no real prose
+describe("provenance gate — no extractable prose (fall-through)", () => {
+  // SUPERSEDED behavior: previously a protected note with only a skeleton
+  // placeholder re-stamped `claude-code` forever, permanently sticking the note.
+  // NEW: an empty protected section has no prose to protect, so it falls through
+  // to the normal unprotected flow — the LLM may regenerate and `by` stamps
+  // per normal rules. This un-sticks a note whose prose the user blanked.
+  it("protected (claude-code) with skeleton-only section + llm on: regenerates, by = jd-survey-llm", async () => {
+    const exec = vi.fn().mockResolvedValue({ code: 0, stdout: "Fresh regenerated prose.", stderr: "" });
+    const request = vi.fn();
     const body =
       "# T\n\n## Contents (Filesystem)\n\n> [!info] Filesystem snapshot\n> 1 item · surveyed 2026-01-01 · depth 2\n\n" +
       "<!-- TODO: prose summary -->\n";
@@ -256,10 +264,10 @@ describe("provenance gate — no extractable prose", () => {
       fs: fsWith2Items, today: new Date("2026-07-16"), request, exec, embedEnabled: false,
     });
     expect(res.status).toBe("surveyed");
-    expect(res.by).toBe("claude-code");             // provenance preserved
-    expect(res.section).toContain("<!-- TODO: prose summary -->"); // skeleton emitted
-    expect(request).not.toHaveBeenCalled();
-    expect(exec).not.toHaveBeenCalled();
+    expect(res.by).toBe("jd-survey-llm");            // regenerated → normal stamp
+    expect(res.section).toContain("Fresh regenerated prose.");
+    expect(res.section).not.toContain("<!-- TODO: prose summary -->");
+    expect(exec).toHaveBeenCalled();                 // LLM reached
   });
 
   it("protected (human) with real prose: does not call judge even with keepIfAccurate ON, preserves prose", async () => {
@@ -294,5 +302,139 @@ describe("embed emission", () => {
       fs: fsWith2Items, today: new Date("2026-07-16"), request: null, exec: null, embedEnabled: false,
     });
     expect(res.section).not.toContain("EmbedRelativeTo");
+  });
+  it("honors cfg.embedVirtualDir when appending the embed", async () => {
+    const res = await surveyNote("A/13.22 Imaging.md", { "jd-id": "13.22", title: "Imaging" }, "# T\n",
+      { ...cfgSkeleton, embedVirtualDir: "docs" } as any, {
+        fs: fsWith2Items, today: new Date("2026-07-16"), request: null, exec: null, embedEnabled: true,
+      });
+    expect(res.section).toContain("```EmbedRelativeTo\ndocs://A/13.22 Imaging/#\n```");
+  });
+});
+
+describe("surgical protected path", () => {
+  const protectedFm = (by: string) =>
+    ({ "jd-id": "13.22", title: "Imaging", survey: { at: "2026-01-01", items: 1, depth: 2, by, stubs: 0 } });
+
+  it("preserves a human blockquote after the snapshot callout, refreshes the callout", async () => {
+    const request = vi.fn(); const exec = vi.fn();
+    const body =
+      "# T\n\n## Contents (Filesystem)\n\n" +
+      "> [!info] Filesystem snapshot\n> 1 item · surveyed 2026-01-01 · depth 2\n\n" +
+      "> [!warning] Do not touch\n> hand-authored caveat\n\n" +
+      "Curated gloss.\n";
+    const res = await surveyNote("A/13.22 Imaging.md", protectedFm("human"), body, cfgLlmOn, {
+      fs: fsWith2Items, today: new Date("2026-07-16"), request, exec, embedEnabled: false,
+    });
+    expect(res.by).toBe("human");
+    expect(res.section).toContain("> [!warning] Do not touch\n> hand-authored caveat"); // byte-for-byte
+    expect(res.section).toContain("2 items");         // snapshot refreshed
+    expect(res.section).not.toContain("1 item ·");
+    expect(res.section).toContain("Curated gloss.");
+    expect(request).not.toHaveBeenCalled();
+    expect(exec).not.toHaveBeenCalled();
+  });
+
+  it("inserts a fresh snapshot callout after the heading when the human replaced it", async () => {
+    const body =
+      "# T\n\n## Contents (Filesystem)\n\n" +
+      "> [!note] My own summary callout\n> replaced the snapshot\n\n" +
+      "Prose body.\n";
+    const res = await surveyNote("A/13.22 Imaging.md", protectedFm("claude-code"), body, cfgLlmOn, {
+      fs: fsWith2Items, today: new Date("2026-07-16"), request: vi.fn(), exec: vi.fn(), embedEnabled: false,
+    });
+    expect(res.section).toContain("> [!note] My own summary callout\n> replaced the snapshot"); // untouched
+    expect(res.section).toContain("> [!info] Filesystem snapshot"); // fresh callout inserted
+    expect(res.section).toContain("2 items");
+    // Fresh callout is inserted after the heading, before the human callout.
+    expect(res.section!.indexOf("[!info] Filesystem snapshot"))
+      .toBeLessThan(res.section!.indexOf("[!note] My own summary callout"));
+  });
+
+  it("preserves a hand-authored EmbedRelativeTo pointing elsewhere; appends no second embed", async () => {
+    const body =
+      "# T\n\n## Contents (Filesystem)\n\n" +
+      "> [!info] Filesystem snapshot\n> 1 item · surveyed 2026-01-01 · depth 2\n\n" +
+      "Prose.\n\n" +
+      "```EmbedRelativeTo\nicloud://SOME/OTHER/TARGET/#\n```\n";
+    const res = await surveyNote("A/13.22 Imaging.md", protectedFm("human"), body, cfgLlmOn, {
+      fs: fsWith2Items, today: new Date("2026-07-16"), request: vi.fn(), exec: vi.fn(), embedEnabled: true,
+    });
+    expect(res.section).toContain("icloud://SOME/OTHER/TARGET/#"); // preserved exactly
+    expect(res.section).not.toContain("icloud://A/13.22 Imaging/#"); // no engine embed appended
+    expect((res.section!.match(/```EmbedRelativeTo/g) || []).length).toBe(1);
+  });
+
+  it("appends the embed once when protected prose has none, and is idempotent", async () => {
+    const body =
+      "# T\n\n## Contents (Filesystem)\n\n" +
+      "> [!info] Filesystem snapshot\n> 1 item · surveyed 2026-01-01 · depth 2\n\n" +
+      "Prose only, no embed.\n";
+    const deps1 = { fs: fsWith2Items, today: new Date("2026-07-16"), request: vi.fn(), exec: vi.fn(), embedEnabled: true };
+    const res1 = await surveyNote("A/13.22 Imaging.md", protectedFm("claude-code"), body, cfgLlmOn, deps1);
+    expect((res1.section!.match(/```EmbedRelativeTo/g) || []).length).toBe(1);
+    expect(res1.section).toContain("icloud://A/13.22 Imaging/#");
+
+    // Re-running on the transformed section must be a no-op (idempotent).
+    const body2 = "# T\n\n" + res1.section;
+    const res2 = await surveyNote("A/13.22 Imaging.md", protectedFm("claude-code"), body2, cfgLlmOn, deps1);
+    expect(res2.section).toBe(res1.section);
+  });
+
+  it("does not truncate protected prose containing a literal EmbedRelativeTo fence in a code example", async () => {
+    // The prose intentionally shows an EmbedRelativeTo fence as a fenced example.
+    const body =
+      "# T\n\n## Contents (Filesystem)\n\n" +
+      "> [!info] Filesystem snapshot\n> 1 item · surveyed 2026-01-01 · depth 2\n\n" +
+      "Prose explaining embeds.\n\n" +
+      "Example fence:\n\n" +
+      "```EmbedRelativeTo\nicloud://EXAMPLE/#\n```\n";
+    // embedEnabled false so we don't append anything; we only refresh the callout.
+    const res = await surveyNote("A/13.22 Imaging.md", protectedFm("human"), body, cfgLlmOn, {
+      fs: fsWith2Items, today: new Date("2026-07-16"), request: vi.fn(), exec: vi.fn(), embedEnabled: false,
+    });
+    expect(res.section).toContain("Prose explaining embeds.");
+    expect(res.section).toContain("Example fence:");
+    expect(res.section).toContain("```EmbedRelativeTo\nicloud://EXAMPLE/#\n```"); // preserved
+    expect(res.section).toContain("2 items"); // callout still refreshed
+  });
+});
+
+describe("Fix 2 — no-new-prose keeps existing prose", () => {
+  it("llmEnabled false + existing jd-survey-llm prose: prose kept, by jd-survey-llm, callout refreshed, NOT skeleton", async () => {
+    const existingProse = "2 files: tax PDFs.";
+    const fm = { "jd-id": "13.22", title: "Imaging", survey: { at: "2026-01-01", items: 1, depth: 2, by: "jd-survey-llm", stubs: 0 } } as any;
+    const body =
+      "# T\n\n" + renderWithProse(renderCallout(1, "2026-01-01", 2, 0), existingProse) + "\n";
+    const cfgOff = { ...cfg, llmEnabled: false } as any;
+    const res = await surveyNote("A/13.22 Imaging.md", fm, body, cfgOff, {
+      fs: fsWith2Items, today: new Date("2026-07-16"), request: null, exec: null, embedEnabled: false,
+    });
+    expect(res.by).toBe("jd-survey-llm");
+    expect(res.section).toContain(existingProse);
+    expect(res.section).not.toContain("<!-- TODO: prose summary -->");
+    expect(res.section).toContain("2 items"); // callout refreshed
+  });
+});
+
+describe("Fix 3 — never fabricate human provenance", () => {
+  it("keepIfAccurate KEEP with prose but no survey.by: stamps jd-survey-llm, not human", async () => {
+    // No `survey.by` at all → not protected → judge path. Judge says KEEP.
+    const existingProse = "2 files: tax PDFs from prior year.";
+    const fm = { "jd-id": "13.22", title: "Imaging" } as any; // note: NO survey object
+    const body =
+      "# T\n\n" + renderWithProse(renderCallout(2, "2026-01-01", 2, 0), existingProse) + "\n";
+    const keepReq = async (opts: { body: string }) => {
+      const parsed = JSON.parse(opts.body) as { messages: { content: string }[] };
+      const promptText = parsed.messages[0].content as string;
+      if (promptText.includes("FORMAT")) return { status: 200, json: { content: [{ type: "text", text: "gen" }] }, text: "" };
+      return { status: 200, json: { content: [{ type: "text", text: "KEEP" }] }, text: "" };
+    };
+    const keepCfg = { ...cfg, llmEnabled: true, anthropicApiKey: "k", keepIfAccurate: true } as any;
+    const res = await surveyNote("A/13.22 Imaging.md", fm, body, keepCfg, {
+      fs: fsWith2Items, today: new Date("2026-07-16"), request: keepReq as any, exec: null, embedEnabled: false,
+    });
+    expect(res.by).toBe("jd-survey-llm"); // NOT "human"
+    expect(res.section).toContain(existingProse);
   });
 });

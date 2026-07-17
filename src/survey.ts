@@ -6,7 +6,7 @@ import type { Frontmatter, SurveyBy, SurveyObject } from "./types";
 import { resolveFsPath } from "./pathResolver";
 import { walk } from "./walker";
 import { formatDate } from "./date";
-import { renderCallout, renderSkeleton, renderWithProse, renderEmbed } from "./renderer";
+import { renderCallout, renderSkeleton, renderWithProse, renderEmbed, matchSection, replaceSnapshotCallout, sectionHasEmbedFence, sectionHasProse } from "./renderer";
 import { buildTree, buildLlmPrompt, buildJudgePrompt, extractExistingProse, extractEmbeddedCount, COUNT_DRIFT_REWRITE_THRESHOLD } from "./prose";
 import type { RequestFn } from "./anthropic";
 import { generateProseFrom } from "./proseSource";
@@ -39,22 +39,40 @@ export async function surveyNote(
 
   const dateStr = formatDate(deps.today, cfg.dateFormat);
   const callout = renderCallout(w.items, dateStr, depth, w.stubs);
+  const embed = (deps.embedEnabled && res.embedRel)
+    ? renderEmbed(res.embedRel, cfg.embedVirtualDir) : undefined;
 
   const existingBy = obj["by"] as SurveyBy | undefined;
   const proseProtected = existingBy === "claude-code" || existingBy === "human";
 
+  // ── Surgical protected path ──
+  // When the slot is provenance-protected AND its existing section carries real
+  // prose, we NEVER re-render the section. Instead we take the existing section
+  // verbatim and transform it minimally: refresh the snapshot callout in place
+  // and, if the section has no EmbedRelativeTo fence yet, append a fresh embed.
+  // Hand-authored callouts, blockquotes, and embeds are preserved byte-for-byte.
+  // (An empty protected section — no real prose — is a dead end; we fall through
+  //  to the normal flow so the note can be regenerated and un-stuck.)
+  if (proseProtected) {
+    const existingSection = matchSection(body);
+    if (existingSection && sectionHasProse(existingSection)) {
+      let section = replaceSnapshotCallout(existingSection, callout);
+      if (embed && !sectionHasEmbedFence(existingSection)) {
+        section = section.trimEnd() + "\n\n" + embed;
+      }
+      // Normalize a single trailing newline to match renderer output shape.
+      section = section.trimEnd() + "\n";
+      const by = existingBy as SurveyBy;
+      const survey: SurveyObject = { at: dateStr, items: w.items, depth, by, stubs: w.stubs };
+      return { status: "surveyed", reason: "ok", by, section, survey };
+    }
+    // else: empty protected section → fall through to the normal unprotected flow.
+  }
+
   let prose: string | null = null;
   let keptExisting = false;
 
-  // Provenance gate: never overwrite skill/human-authored prose. Applies even
-  // when llmEnabled is false, so skeleton runs don't clobber protected prose.
-  if (proseProtected) {
-    const existing = extractExistingProse(body);
-    if (existing) { prose = existing; keptExisting = true; }
-    else { keptExisting = true; }  // protected slot with no extractable prose: still block LLM; emit skeleton, preserve provenance
-  }
-
-  if (!keptExisting && cfg.llmEnabled && cfg.proseProvider !== "skeleton") {
+  if (cfg.llmEnabled && cfg.proseProvider !== "skeleton") {
     const jdid = (fm["jd-id"] as string) || relPath.split("/").pop()!.split(" ")[0];
     const title = (fm["title"] as string) || path.posix.basename(relPath, ".md").split(" ").slice(1).join(" ");
     const tree = buildTree(res.fsPath, depth, deps.fs, res.skipPath ?? undefined);
@@ -85,13 +103,26 @@ export async function surveyNote(
     }
   }
 
+  // Fix 2: a no-new-prose run (LLM disabled, skeleton provider, or provider
+  // failure) must not clobber existing prose with the TODO placeholder. If we
+  // produced no fresh prose and didn't already keep something, salvage the
+  // existing prose. The trailing-embed strip in extractExistingProse prevents a
+  // double embed when this kept prose is re-rendered with the fresh embed below.
+  if (!prose && !keptExisting) {
+    const existing = extractExistingProse(body);
+    if (existing) { prose = existing; keptExisting = true; }
+  }
+
+  // Fix 3: never fabricate `human` (or `claude-code`) provenance. The only path
+  // that yields protected provenance is the surgical path above (which returns
+  // early). Every kept-existing path here — judge-KEEP, Fix-2 keep — stamps
+  // jd-survey-llm unless the note already carried a valid `by` value.
   let by: SurveyBy;
   if (keptExisting) {
-    by = (obj["by"] as SurveyBy) || "human";   // preserve existing provenance
+    by = (obj["by"] as SurveyBy) || "jd-survey-llm";
   } else {
     by = prose ? "jd-survey-llm" : "jd-survey";
   }
-  const embed = (deps.embedEnabled && res.embedRel) ? renderEmbed(res.embedRel) : undefined;
   const section = prose ? renderWithProse(callout, prose, embed) : renderSkeleton(callout, embed);
   const survey: SurveyObject = { at: dateStr, items: w.items, depth, by, stubs: w.stubs };
   return { status: "surveyed", reason: "ok", by, section, survey };
