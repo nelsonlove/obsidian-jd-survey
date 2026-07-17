@@ -30,6 +30,24 @@ describe("extract helpers", () => {
   });
 });
 
+describe("extractExistingProse strips trailing embed", () => {
+  it("returns prose without the EmbedRelativeTo block", () => {
+    const body =
+      "# T\n\n## Contents (Filesystem)\n\n" +
+      "> [!info] Filesystem snapshot\n> 2 items · surveyed 2026-07-16 · depth 2\n\n" +
+      "Two items: medical imaging records.\n\n" +
+      "```EmbedRelativeTo\nicloud://A/B/#\n```\n";
+    expect(extractExistingProse(body)).toBe("Two items: medical imaging records.");
+  });
+  it("still works when there is no embed", () => {
+    const body =
+      "# T\n\n## Contents (Filesystem)\n\n" +
+      "> [!info] Filesystem snapshot\n> 2 items · surveyed 2026-07-16 · depth 2\n\n" +
+      "Two items.\n";
+    expect(extractExistingProse(body)).toBe("Two items.");
+  });
+});
+
 describe("buildLlmPrompt", () => {
   it("includes the count and title and format instructions", () => {
     const p = buildLlmPrompt({ jdid: "26.10", title: "Taxes", fsPath: "/docs/26.10 Taxes", count: 24, depth: 2, tree: "26.10 Taxes/\n└── a.pdf" });

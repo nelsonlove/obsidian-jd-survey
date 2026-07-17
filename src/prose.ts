@@ -222,6 +222,22 @@ export function extractExistingProse(body: string): string | null {
     lines = lines.slice(i);
   }
 
+  // Strip a trailing ```EmbedRelativeTo … ``` fenced block (+ preceding blanks).
+  // The engine re-emits a fresh embed, so it must not be treated as prose.
+  {
+    let end = lines.length;
+    while (end > 0 && !lines[end - 1].trim()) end--; // drop trailing blanks
+    if (end > 0 && lines[end - 1].trim() === "```") {
+      let start = end - 1;
+      while (start > 0 && lines[start].trim() !== "```EmbedRelativeTo") start--;
+      if (lines[start].trim() === "```EmbedRelativeTo") {
+        let i = start;
+        while (i > 0 && !lines[i - 1].trim()) i--; // drop blanks before the fence
+        lines = lines.slice(0, i);
+      }
+    }
+  }
+
   const prose = lines.join("\n").trim();
   if (!prose || prose === PROSE_PLACEHOLDER) return null;
   return prose;
