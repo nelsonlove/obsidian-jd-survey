@@ -12,6 +12,9 @@ export class JdSurveySettingTab extends PluginSettingTab {
       .addText((t) => t.setValue(s.frontmatterPrefix).onChange(async (v) => { s.frontmatterPrefix = v.trim() || "survey"; await this.plugin.saveSettings(); }));
     new Setting(containerEl).setName("Filesystem root").setDesc("Root of the filesystem tree (~ expanded).")
       .addText((t) => t.setValue(s.fsRoot).onChange(async (v) => { s.fsRoot = v.trim() || "~/Documents"; await this.plugin.saveSettings(); }));
+    new Setting(containerEl).setName("Embed virtual directory")
+      .setDesc("The External File Embed virtual-directory name that maps to your Filesystem Root; leave `icloud` unless you named it differently.")
+      .addText((t) => t.setValue(s.embedVirtualDir).onChange(async (v) => { s.embedVirtualDir = v.trim() || "icloud"; await this.plugin.saveSettings(); }));
     new Setting(containerEl).setName("Default depth")
       .addText((t) => t.setValue(String(s.defaultDepth)).onChange(async (v) => { const n = parseInt(v, 10); if (n >= 1) { s.defaultDepth = n; await this.plugin.saveSettings(); } }));
     new Setting(containerEl).setName("Staleness threshold (days)")
