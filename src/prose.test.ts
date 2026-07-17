@@ -28,6 +28,59 @@ describe("extract helpers", () => {
     const body = "## Contents (Filesystem)\n\n> [!info] Filesystem snapshot\n> 2 items · surveyed x · depth 2\n\n<!-- TODO: prose summary -->\n";
     expect(extractExistingProse(body)).toBeNull();
   });
+  // Fix 4: only the engine snapshot callout is stripped as non-prose. A leading
+  // human/other callout is real prose and must be retained.
+  it("retains a leading non-snapshot callout as prose", () => {
+    const body =
+      "## Contents (Filesystem)\n\n" +
+      "> [!warning] Hand-authored context\n> read me first\n\n" +
+      "Real prose here.\n\n## Next\n";
+    expect(extractExistingProse(body)).toBe(
+      "> [!warning] Hand-authored context\n> read me first\n\nReal prose here.",
+    );
+  });
+});
+
+describe("extractExistingProse strips trailing embed", () => {
+  it("returns prose without the EmbedRelativeTo block", () => {
+    const body =
+      "# T\n\n## Contents (Filesystem)\n\n" +
+      "> [!info] Filesystem snapshot\n> 2 items · surveyed 2026-07-16 · depth 2\n\n" +
+      "Two items: medical imaging records.\n\n" +
+      "```EmbedRelativeTo\nicloud://A/B/#\n```\n";
+    expect(extractExistingProse(body)).toBe("Two items: medical imaging records.");
+  });
+  it("still works when there is no embed", () => {
+    const body =
+      "# T\n\n## Contents (Filesystem)\n\n" +
+      "> [!info] Filesystem snapshot\n> 2 items · surveyed 2026-07-16 · depth 2\n\n" +
+      "Two items.\n";
+    expect(extractExistingProse(body)).toBe("Two items.");
+  });
+});
+
+describe("extractExistingProse trailing-embed over-strip regression", () => {
+  it("does NOT strip when the trailing fence closes a bash block (not an embed)", () => {
+    const body =
+      "# T\n\n## Contents (Filesystem)\n\n" +
+      "> [!info] Filesystem snapshot\n> 3 items · surveyed 2026-07-17 · depth 2\n\n" +
+      "Intro prose.\n\n" +
+      "```EmbedRelativeTo\nicloud://A/B/#\n```\n\n" +
+      "Trailing prose.\n\n" +
+      "```bash\nsome command\n```\n";
+    expect(extractExistingProse(body)).toBe(
+      "Intro prose.\n\n```EmbedRelativeTo\nicloud://A/B/#\n```\n\nTrailing prose.\n\n```bash\nsome command\n```"
+    );
+  });
+
+  it("does NOT strip when prose ends in a non-embed fence with no mid-body embed", () => {
+    const body =
+      "# T\n\n## Contents (Filesystem)\n\n" +
+      "> [!info] Filesystem snapshot\n> 5 items · surveyed 2026-07-17 · depth 2\n\n" +
+      "Some prose.\n\n" +
+      "```bash\necho hello\n```\n";
+    expect(extractExistingProse(body)).toBe("Some prose.\n\n```bash\necho hello\n```");
+  });
 });
 
 describe("buildLlmPrompt", () => {

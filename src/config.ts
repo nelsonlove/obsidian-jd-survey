@@ -16,6 +16,7 @@ export interface JdSurveyConfig {
   keepIfAccurate: boolean;
   proseProvider: ProseProvider;
   claudeBinaryPath: string;
+  embedVirtualDir: string;      // External File Embed virtual-directory name mapping to fsRoot
 }
 
 export const DEFAULT_CONFIG: Omit<JdSurveyConfig, "vaultRoot"> = {
@@ -33,6 +34,7 @@ export const DEFAULT_CONFIG: Omit<JdSurveyConfig, "vaultRoot"> = {
   keepIfAccurate: false,
   proseProvider: "auto",
   claudeBinaryPath: "",
+  embedVirtualDir: "icloud",
 };
 
 export interface SurveyKeys {

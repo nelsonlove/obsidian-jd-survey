@@ -1,6 +1,6 @@
 import type { FsLike } from "./fs";
 import { isBundle, isIcloudStub, icloudOriginalName, isVisible } from "./walker";
-import { matchSection, PROSE_PLACEHOLDER } from "./renderer";
+import { matchSection, PROSE_PLACEHOLDER, SNAPSHOT_CALLOUT_MARKER } from "./renderer";
 
 // ── embedded-count regex + threshold (ported from jd-survey.py lines 68–72) ──
 
@@ -208,9 +208,11 @@ export function extractExistingProse(body: string): string | null {
     lines.shift();
   }
 
-  // If the first non-blank starts a callout block (lines starting with `>`),
-  // strip the whole callout plus one blank line after it.
-  if (lines.length > 0 && lines[0].trimStart().startsWith(">")) {
+  // If the first non-blank starts the ENGINE snapshot callout (first line,
+  // trimmed, starts with the snapshot marker), strip the whole `>`-block plus
+  // one blank line after it. A human/other callout at the start is real prose
+  // and must be preserved.
+  if (lines.length > 0 && lines[0].trim().startsWith(SNAPSHOT_CALLOUT_MARKER)) {
     let i = 0;
     while (i < lines.length && lines[i].trimStart().startsWith(">")) {
       i++;
@@ -220,6 +222,27 @@ export function extractExistingProse(body: string): string | null {
       i++;
     }
     lines = lines.slice(i);
+  }
+
+  // Strip a trailing ```EmbedRelativeTo … ``` fenced block (+ preceding blanks).
+  // The engine re-emits a fresh embed, so it must not be treated as prose.
+  // Only strip if the NEAREST preceding fence-opener is exactly ```EmbedRelativeTo.
+  // If it's any other fence opener (e.g. ```bash), the trailing ``` closes an
+  // unrelated block — leave everything alone.
+  {
+    let end = lines.length;
+    while (end > 0 && !lines[end - 1].trim()) end--; // drop trailing blanks
+    if (end > 0 && lines[end - 1].trim() === "```") {
+      // Scan backward from just before the closing fence to find the nearest
+      // line that starts with ```. Stop at the first such line.
+      let start = end - 2;
+      while (start >= 0 && !lines[start].trim().startsWith("```")) start--;
+      if (start >= 0 && lines[start].trim() === "```EmbedRelativeTo") {
+        let i = start;
+        while (i > 0 && !lines[i - 1].trim()) i--; // drop blanks before the fence
+        lines = lines.slice(0, i);
+      }
+    }
   }
 
   const prose = lines.join("\n").trim();

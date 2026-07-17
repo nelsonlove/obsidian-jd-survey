@@ -1,7 +1,7 @@
 {
   "id": "jd-survey",
   "name": "JD Survey",
-  "version": "0.3.0",
+  "version": "0.4.0",
   "minAppVersion": "1.4.0",
   "description": "Survey a note's filesystem mirror: write a Contents (Filesystem) section, stamp survey frontmatter, and track staleness.",
   "author": "Nelson",

@@ -79,8 +79,13 @@ export default class JdSurveyPlugin extends Plugin {
   private vaultRoot(): string {
     return (this.app.vault.adapter as any).basePath ?? "";
   }
+  private embedEnabled(): boolean {
+    // `plugins` is not in the public Obsidian typings.
+    const plugins = (this.app as any).plugins;
+    return !!plugins?.enabledPlugins?.has?.("external-file-embed-and-link");
+  }
   private deps() {
-    return { fs: new NodeFs(), today: new Date(), request, exec };
+    return { fs: new NodeFs(), today: new Date(), request, exec, embedEnabled: this.embedEnabled() };
   }
 
   private guard(): boolean {
