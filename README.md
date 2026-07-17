@@ -11,10 +11,21 @@ When you run **Survey this slot** on an active note:
 3. **Generates a `## Contents (Filesystem)` section** — a `> [!info] Filesystem snapshot` callout containing either:
    - Anthropic-generated prose (if LLM is enabled and the API key is set)
    - A skeleton placeholder (if LLM is disabled or no key is present)
-4. **Stamps survey metadata** into the note's frontmatter (`survey:` object with `at`, `items`, `depth`, `by`, `stubs`)
-5. **Reports staleness** — notes can be bulk-refreshed via **Survey all stale slots**, and a dashboard can be refreshed to show which slots are stale
+4. **Appends a live folder embed** at the end of the section — an `EmbedRelativeTo` codeblock rendering a clickable live folder listing (requires the [External File Embed and Link](https://github.com/wenlzhang/obsidian-external-file-embed-and-link) community plugin; omitted cleanly when absent). Desktop-only, documents-mirror slots only.
+5. **Stamps survey metadata** into the note's frontmatter (`survey:` object with `at`, `items`, `depth`, `by`, `stubs`)
+6. **Reports staleness** — notes can be bulk-refreshed via **Survey all stale slots**, and a dashboard can be refreshed to show which slots are stale
+7. **Protects provenance-marked prose** — if `survey.by` is `claude-code` or `human`, the engine never rewrites the section's prose body; it only refreshes the snapshot callout and embed. `jd-survey-llm` and skeleton prose remain regenerable as before.
 
 This is a TypeScript port of the Python `jd-survey-status` / `jd-survey` CLI with no external dependencies.
+
+## Live folder embed
+
+The `## Contents (Filesystem)` section ends with an `EmbedRelativeTo` codeblock that renders a live, clickable folder listing of the slot's filesystem mirror. This requires:
+
+- The **External File Embed and Link** community plugin to be installed and enabled
+- An `icloud://` virtual directory configured in that plugin pointing at the same root as this plugin's **Filesystem Root** setting
+
+When the External File Embed and Link plugin is absent or the slot uses a non-default mirror (`survey-target: vault` or `survey-filepath` override), the embed is omitted cleanly — no placeholder is written.
 
 ## Installation
 
@@ -50,7 +61,7 @@ Copy `main.js` and `manifest.json` into your vault's `.obsidian/plugins/jd-surve
 | **LLM Enabled** | `true` | Use Anthropic API to generate prose summaries |
 | **Anthropic API Key** | (none) | Stored in `data.json` (propagated by Obsidian Sync) |
 | **Anthropic Model** | `claude-haiku-4-5-20251001` | Which Claude model to use |
-| **Keep if Accurate** | `false` | (Coming soon) Don't regenerate if the snapshot is fresh |
+| **Keep if Accurate** | `false` | When ON, existing `jd-survey-llm` prose is kept if an LLM judge finds it still accurate. Skill/human prose (`by: claude-code` or `by: human`) is always kept regardless of this setting. |
 
 ## Frontmatter contract
 
@@ -61,9 +72,11 @@ survey:
   at: 2026-07-05           # last survey timestamp
   items: 42                # item count at the time of the survey
   depth: 2                 # walk depth used
-  by: jd-survey            # who surveyed: "jd-survey" (skeleton) or "jd-survey-llm" (prose)
+  by: jd-survey            # who surveyed: "jd-survey" (skeleton), "jd-survey-llm" (prose), "claude-code", or "human"
   stubs: true              # whether any items are placeholder files
 ```
+
+The `by` field controls prose protection: `claude-code` and `human` mark the section's prose as **provenance-protected** — the plugin will not overwrite it on re-survey, only refreshing the snapshot callout and live embed. Set `by: claude-code` when a context-aware agent has written the prose; set `by: human` when you have written it yourself. `jd-survey-llm` and `jd-survey` prose remains regenerable as before.
 
 Additional control keys:
 
