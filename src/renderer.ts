@@ -8,12 +8,18 @@ export function renderCallout(items: number, dateStr: string, depth: number, stu
   return `> [!info] Filesystem snapshot\n> ${parts.join(" · ")}`;
 }
 
-export function renderSkeleton(callout: string): string {
-  return `${SECTION_HEADING}\n\n${callout}\n\n${PROSE_PLACEHOLDER}\n`;
+export function renderEmbed(relFolder: string): string {
+  return "```EmbedRelativeTo\nicloud://" + relFolder + "/#\n```";
 }
 
-export function renderWithProse(callout: string, prose: string): string {
-  return `${SECTION_HEADING}\n\n${callout}\n\n${prose.trimEnd()}\n`;
+export function renderSkeleton(callout: string, embed?: string): string {
+  const tail = embed ? `\n\n${embed}` : "";
+  return `${SECTION_HEADING}\n\n${callout}\n\n${PROSE_PLACEHOLDER}${tail}\n`;
+}
+
+export function renderWithProse(callout: string, prose: string, embed?: string): string {
+  const tail = embed ? `\n\n${embed}` : "";
+  return `${SECTION_HEADING}\n\n${callout}\n\n${prose.trimEnd()}${tail}\n`;
 }
 
 function findHeadingStart(body: string): number {

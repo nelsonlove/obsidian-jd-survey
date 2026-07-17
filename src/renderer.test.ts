@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { renderCallout, renderSkeleton, renderWithProse, upsertSection, matchSection, SECTION_HEADING } from "./renderer";
+import { renderCallout, renderSkeleton, renderWithProse, upsertSection, matchSection, SECTION_HEADING, renderEmbed } from "./renderer";
 
 describe("renderCallout", () => {
   it("renders without stubs", () => {
@@ -93,5 +93,38 @@ describe("matchSection (extended)", () => {
     expect(s).toContain("Para two.");
     expect(s).not.toContain("## Next");
     expect(matchSection("# no section here\n")).toBeNull();
+  });
+});
+
+describe("renderEmbed", () => {
+  it("builds an EmbedRelativeTo icloud folder block", () => {
+    expect(renderEmbed("10-19 Personal/13 Health & medical/13.22 Imaging")).toBe(
+      "```EmbedRelativeTo\nicloud://10-19 Personal/13 Health & medical/13.22 Imaging/#\n```",
+    );
+  });
+});
+
+describe("renderWithProse + embed", () => {
+  const callout = renderCallout(2, "2026-07-16", 2, 0);
+  it("appends the embed after the prose when given", () => {
+    const embed = renderEmbed("A/B");
+    const out = renderWithProse(callout, "Two items.", embed);
+    expect(out).toBe(
+      "## Contents (Filesystem)\n\n" + callout + "\n\nTwo items.\n\n" + embed + "\n",
+    );
+  });
+  it("omits the embed when not given (unchanged behavior)", () => {
+    expect(renderWithProse(callout, "Two items.")).toBe(
+      "## Contents (Filesystem)\n\n" + callout + "\n\nTwo items.\n",
+    );
+  });
+});
+
+describe("renderSkeleton + embed", () => {
+  const callout = renderCallout(0, "2026-07-16", 2, 0);
+  it("appends the embed after the placeholder when given", () => {
+    const embed = renderEmbed("A/B");
+    const out = renderSkeleton(callout, embed);
+    expect(out).toContain("<!-- TODO: prose summary -->\n\n" + embed + "\n");
   });
 });
