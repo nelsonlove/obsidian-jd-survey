@@ -244,6 +244,44 @@ describe("provenance gate", () => {
   });
 });
 
+describe("provenance gate — no extractable prose", () => {
+  it("protected (claude-code) with skeleton-only section: does not call LLM, keeps provenance, emits skeleton", async () => {
+    const request = vi.fn(); const exec = vi.fn();
+    // Body has a Contents section but only the skeleton placeholder — no real prose
+    const body =
+      "# T\n\n## Contents (Filesystem)\n\n> [!info] Filesystem snapshot\n> 1 item · surveyed 2026-01-01 · depth 2\n\n" +
+      "<!-- TODO: prose summary -->\n";
+    const fm = { "jd-id": "13.22", title: "Imaging", survey: { at: "2026-01-01", items: 1, depth: 2, by: "claude-code", stubs: 0 } };
+    const res = await surveyNote("A/13.22 Imaging.md", fm, body, cfgLlmOn, {
+      fs: fsWith2Items, today: new Date("2026-07-16"), request, exec, embedEnabled: false,
+    });
+    expect(res.status).toBe("surveyed");
+    expect(res.by).toBe("claude-code");             // provenance preserved
+    expect(res.section).toContain("<!-- TODO: prose summary -->"); // skeleton emitted
+    expect(request).not.toHaveBeenCalled();
+    expect(exec).not.toHaveBeenCalled();
+  });
+
+  it("protected (human) with real prose: does not call judge even with keepIfAccurate ON, preserves prose", async () => {
+    const request = vi.fn(); const exec = vi.fn();
+    const existingProse = "Curated scans and X-rays from annual checkups.";
+    const body =
+      "# T\n\n" +
+      renderWithProse(renderCallout(2, "2026-01-01", 2, 0), existingProse) +
+      "\n";
+    const fm = { "jd-id": "13.22", title: "Imaging", survey: { at: "2026-01-01", items: 2, depth: 2, by: "human", stubs: 0 } };
+    const keepLlmCfg = { ...cfgLlmOn, keepIfAccurate: true } as any;
+    const res = await surveyNote("A/13.22 Imaging.md", fm, body, keepLlmCfg, {
+      fs: fsWith2Items, today: new Date("2026-07-16"), request, exec, embedEnabled: false,
+    });
+    expect(res.status).toBe("surveyed");
+    expect(res.by).toBe("human");                   // provenance preserved
+    expect(res.section).toContain(existingProse);   // existing prose kept
+    expect(request).not.toHaveBeenCalled();         // judge never reached
+    expect(exec).not.toHaveBeenCalled();
+  });
+});
+
 describe("embed emission", () => {
   it("appends the embed when embedEnabled and embedRel present", async () => {
     const res = await surveyNote("A/13.22 Imaging.md", { "jd-id": "13.22", title: "Imaging" }, "# T\n", cfgSkeleton, {

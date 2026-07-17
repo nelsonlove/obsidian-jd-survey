@@ -51,6 +51,7 @@ export async function surveyNote(
   if (proseProtected) {
     const existing = extractExistingProse(body);
     if (existing) { prose = existing; keptExisting = true; }
+    else { keptExisting = true; }  // protected slot with no extractable prose: still block LLM; emit skeleton, preserve provenance
   }
 
   if (!keptExisting && cfg.llmEnabled && cfg.proseProvider !== "skeleton") {
