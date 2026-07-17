@@ -6,7 +6,7 @@ import type { Frontmatter, SurveyTarget } from "./types";
 export type ResolveResult =
   | { kind: "optout" }
   | { kind: "no-mapping" }
-  | { kind: "resolved"; fsPath: string; skipPath: string | null };
+  | { kind: "resolved"; fsPath: string; skipPath: string | null; embedRel: string | null };
 
 export function expandTilde(p: string, home: string): string {
   if (p === "~") return home;
@@ -49,7 +49,7 @@ export function resolveFsPath(
       if (abs !== fsRoot && !abs.startsWith(fsRoot + "/")) return { kind: "no-mapping" };
     }
     return fs.isDirectory(abs)
-      ? { kind: "resolved", fsPath: abs, skipPath: null }
+      ? { kind: "resolved", fsPath: abs, skipPath: null, embedRel: null }
       : { kind: "no-mapping" };
   }
 
@@ -62,7 +62,7 @@ export function resolveFsPath(
     const abs = path.posix.normalize(cfg.vaultRoot + "/" + parentRel);
     if (!fs.isDirectory(abs)) return { kind: "no-mapping" };
     const noteAbs = path.posix.normalize(cfg.vaultRoot + "/" + relPath);
-    return { kind: "resolved", fsPath: abs, skipPath: noteAbs };
+    return { kind: "resolved", fsPath: abs, skipPath: noteAbs, embedRel: null };
   }
 
   // 4. Default: parallel-tree in fsRoot
@@ -71,5 +71,5 @@ export function resolveFsPath(
   else mirrorRel = relPath.replace(/\.md$/, "");
   const abs = path.posix.normalize(fsRoot + "/" + mirrorRel);
   if (!fs.isDirectory(abs)) return { kind: "no-mapping" };
-  return { kind: "resolved", fsPath: abs, skipPath: null };
+  return { kind: "resolved", fsPath: abs, skipPath: null, embedRel: mirrorRel };
 }

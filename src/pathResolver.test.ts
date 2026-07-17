@@ -45,13 +45,13 @@ describe("resolveFsPath", () => {
   it("resolves the parallel-tree mirror for a cat-level note", () => {
     const fs = makeFakeFs({ "/docs/A/26.10 X": { "f.pdf": "file" } });
     const r = resolveFsPath("A/26.10 X.md", {}, cfg(), keys, fs);
-    expect(r).toEqual({ kind: "resolved", fsPath: "/docs/A/26.10 X", skipPath: null });
+    expect(r).toEqual({ kind: "resolved", fsPath: "/docs/A/26.10 X", skipPath: null, embedRel: "A/26.10 X" });
   });
 
   it("resolves the parent dir for a folder note", () => {
     const fs = makeFakeFs({ "/docs/A/26.54 X": { "f.pdf": "file" } });
     const r = resolveFsPath("A/26.54 X/26.54 X.md", {}, cfg(), keys, fs);
-    expect(r).toEqual({ kind: "resolved", fsPath: "/docs/A/26.54 X", skipPath: null });
+    expect(r).toEqual({ kind: "resolved", fsPath: "/docs/A/26.54 X", skipPath: null, embedRel: "A/26.54 X" });
   });
 
   it("returns no-mapping when the documents dir is absent", () => {
@@ -64,14 +64,14 @@ describe("resolveFsPath", () => {
     const fs = makeFakeFs({ "/vault/A/26.54 X": { "26.54 X.md": "file", "note.md": "file" } });
     const r = resolveFsPath("A/26.54 X/26.54 X.md", { "survey-target": "vault" }, cfg(), keys, fs);
     expect(r).toEqual({
-      kind: "resolved", fsPath: "/vault/A/26.54 X", skipPath: "/vault/A/26.54 X/26.54 X.md",
+      kind: "resolved", fsPath: "/vault/A/26.54 X", skipPath: "/vault/A/26.54 X/26.54 X.md", embedRel: null,
     });
   });
 
   it("honors an absolute survey-filepath override", () => {
     const fs = makeFakeFs({ "/elsewhere/data": { "x": "file" } });
     const r = resolveFsPath("A/26.10 X.md", { "survey-filepath": "/elsewhere/data" }, cfg(), keys, fs);
-    expect(r).toEqual({ kind: "resolved", fsPath: "/elsewhere/data", skipPath: null });
+    expect(r).toEqual({ kind: "resolved", fsPath: "/elsewhere/data", skipPath: null, embedRel: null });
   });
 
   it("resolves a relative survey-filepath against fsRoot", () => {
@@ -97,5 +97,35 @@ describe("resolveFsPath", () => {
     const fs = makeFakeFs({});
     const r = resolveFsPath("A/26.10 X.md", { "survey-filepath": "bad\0path" }, cfg(), keys, fs);
     expect(r.kind).toBe("no-mapping");
+  });
+});
+
+describe("resolveFsPath embedRel", () => {
+  const config = cfg({ fsRoot: "/Users/x/Documents", vaultRoot: "/Users/x/vault" });
+  const fs = makeFakeFs({
+    "/Users/x/Documents/A/B/13.22 Imaging": { "note.md": "file" },
+    "/Users/x/Documents/A/13.22 Imaging": { "note.md": "file" },
+  });
+
+  it("documents mirror (folder note) → fsRoot-relative folder", () => {
+    const r = resolveFsPath("A/B/13.22 Imaging/13.22 Imaging.md", {}, config, keys, fs);
+    expect(r).toMatchObject({ kind: "resolved", embedRel: "A/B/13.22 Imaging" });
+  });
+
+  it("documents mirror (leaf note) → strips .md", () => {
+    const r = resolveFsPath("A/13.22 Imaging.md", {}, config, keys, fs);
+    expect(r).toMatchObject({ kind: "resolved", embedRel: "A/13.22 Imaging" });
+  });
+
+  it("vault target → embedRel null", () => {
+    const vaultFs = makeFakeFs({ "/Users/x/vault/A/B/B": { "B.md": "file", "note.md": "file" } });
+    const r = resolveFsPath("A/B/B/B.md", { "survey-target": "vault" }, config, keys, vaultFs);
+    expect(r).toMatchObject({ kind: "resolved", embedRel: null });
+  });
+
+  it("explicit filepath override → embedRel null", () => {
+    const overrideFs = makeFakeFs({ "/tmp/x": { "data": "file" } });
+    const r = resolveFsPath("A/B.md", { "survey-filepath": "/tmp/x" }, config, keys, overrideFs);
+    expect(r).toMatchObject({ kind: "resolved", embedRel: null });
   });
 });
