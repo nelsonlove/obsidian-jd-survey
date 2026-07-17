@@ -37,10 +37,10 @@ export class JdSurveySettingTab extends PluginSettingTab {
     new Setting(containerEl).setName("Claude binary path").setDesc("Optional absolute path to the `claude` binary; leave blank to search PATH (Homebrew/usr-local/.local/.claude are auto-added).")
       .addText((t) => t.setPlaceholder("claude").setValue(s.claudeBinaryPath).onChange(async (v) => { s.claudeBinaryPath = v.trim(); await this.plugin.saveSettings(); }));
     new Setting(containerEl)
-      .setName("Keep if accurate (coming soon)")
-      .setDesc("Preserve existing prose when still accurate. Not yet implemented.")
+      .setName("Keep if accurate")
+      .setDesc("When re-surveying, keep existing jd-survey-llm prose if a judge finds it still accurate. (Skill/human prose is always kept, regardless of this setting.)")
       .addToggle((t) =>
-        t.setValue(s.keepIfAccurate).setDisabled(true).onChange(async (v) => {
+        t.setValue(s.keepIfAccurate).onChange(async (v) => {
           s.keepIfAccurate = v;
           await this.plugin.saveSettings();
         }),
