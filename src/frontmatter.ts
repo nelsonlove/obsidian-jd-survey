@@ -1,6 +1,7 @@
 import type { Frontmatter } from "./types";
 import type { SurveyKeys } from "./config";
 import type { SurveyObject } from "./types";
+import { parseDate, formatDate } from "./date";
 
 export function applySurveyToFrontmatter(fm: Frontmatter, survey: SurveyObject, keys: SurveyKeys): void {
   fm[keys.object] = {
@@ -21,11 +22,15 @@ export function migrateFrontmatter(fm: Frontmatter, keys: SurveyKeys): boolean {
   return changed;
 }
 
-/** First YYYY-MM-DD prefix of a legacy date value, or null if it has none. */
+/**
+ * Normalize a legacy date value to `YYYY-MM-DD`, or null if it isn't a date.
+ * Obsidian's frontmatter parser hands unquoted ISO dates back as JS `Date`
+ * objects (not strings), so we route through `parseDate`, which accepts a
+ * `Date`, a `YYYY-MM-DD[...]` string (datetime suffix ignored), or null.
+ */
 function legacyDate(v: unknown): string | null {
-  if (typeof v !== "string" && typeof v !== "number") return null;
-  const m = /^(\d{4}-\d{2}-\d{2})/.exec(String(v).trim());
-  return m ? m[1] : null;
+  const d = parseDate(v);
+  return d ? formatDate(d, "YYYY-MM-DD") : null;
 }
 
 /**
@@ -41,7 +46,8 @@ export function migrateLegacySurveyed(fm: Frontmatter, keys: SurveyKeys): boolea
   const flatPresent = keys.legacyFlat.filter((k) => Object.prototype.hasOwnProperty.call(fm, k));
   if (!hasBare && flatPresent.length === 0) return false;
 
-  const hasNested = fm[keys.object] !== undefined && typeof fm[keys.object] === "object";
+  const existing = fm[keys.object];
+  const hasNested = typeof existing === "object" && existing !== null && !Array.isArray(existing);
   if (!hasNested) {
     const obj: Record<string, unknown> = {};
     // Flat keys are the newer legacy generation — prefer their date over the bare scalar's.

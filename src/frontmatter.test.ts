@@ -54,6 +54,36 @@ describe("migrateLegacySurveyed", () => {
     expect(fm.survey).toEqual({ at: "2026-03-31" });
   });
 
+  it("handles a Date-valued surveyed (Obsidian parses unquoted ISO dates to Date objects)", () => {
+    // This is the ACTUAL production shape — the metadata cache / processFrontMatter
+    // hand back a JS Date, not a string, for `surveyed: 2026-05-06`.
+    const fm: any = { surveyed: new Date(2026, 4, 6) };
+    expect(migrateLegacySurveyed(fm, keys)).toBe(true);
+    expect(fm.survey).toEqual({ at: "2026-05-06" });
+  });
+
+  it("handles a Date-valued survey-at in the flat path", () => {
+    const fm: any = {
+      "survey-at": new Date(2026, 5, 17), "survey-items": 42,
+      "survey-depth": 2, "survey-by": "jd-survey-llm", "survey-stubs": 0,
+    };
+    expect(migrateLegacySurveyed(fm, keys)).toBe(true);
+    expect(fm.survey.at).toBe("2026-06-17");
+  });
+
+  it("converts a non-date bare scalar to an empty object (no fabricated at)", () => {
+    const fm: any = { surveyed: "yes" };
+    expect(migrateLegacySurveyed(fm, keys)).toBe(true);
+    expect(fm.survey).toEqual({});
+    expect(fm.surveyed).toBeUndefined();
+  });
+
+  it("treats survey: null as absent and still builds the object", () => {
+    const fm: any = { survey: null, surveyed: new Date(2026, 0, 1) };
+    expect(migrateLegacySurveyed(fm, keys)).toBe(true);
+    expect(fm.survey).toEqual({ at: "2026-01-01" });
+  });
+
   it("converts full flat keys to a complete nested object", () => {
     const fm: any = {
       "survey-at": "2026-06-17", "survey-by": "jd-survey-llm",
