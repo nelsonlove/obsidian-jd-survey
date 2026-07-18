@@ -47,6 +47,7 @@ Copy `main.js` and `manifest.json` into your vault's `.obsidian/plugins/jd-surve
 - **Survey all stale slots** — find all notes with filesystem mirrors older than the staleness threshold and re-survey them
 - **Refresh stale-surveys table** — rebuild the stale-surveys dashboard by scanning all surveyed notes
 - **Migrate has-filesystem** — convert legacy `has-filesystem: false` opt-out to the new `survey-target: none` syntax
+- **Migrate legacy surveyed** — convert legacy survey frontmatter (bare `surveyed:` scalar and flat `survey-*` keys) to the nested `survey:` object. A bare scalar becomes a deliberately partial `{at}` — no fabricated counts or provenance — so the note runs age-based staleness until a real survey fills the rest; flat keys carry their fields over. Never clobbers an existing `survey:` object.
 
 ## Settings
 

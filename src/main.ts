@@ -3,7 +3,7 @@ import { DEFAULT_CONFIG, JdSurveyConfig, deriveKeys } from "./config";
 import { NodeFs } from "./fs";
 import { surveyNote } from "./survey";
 import { stampFrontmatter, writeBody } from "./obsidian/stamp";
-import { applySurveyToFrontmatter, migrateFrontmatter } from "./frontmatter";
+import { applySurveyToFrontmatter, migrateFrontmatter, migrateLegacySurveyed } from "./frontmatter";
 import { candidatesFromPaths } from "./obsidian/notes";
 import { readSurveyState, stalenessReason } from "./staleness";
 import { walk } from "./walker";
@@ -47,6 +47,7 @@ export default class JdSurveyPlugin extends Plugin {
     this.addCommand({ id: "survey-all-stale", name: "Survey all stale slots", callback: () => this.surveyAllStale() });
     this.addCommand({ id: "refresh-stale-table", name: "Refresh stale-surveys table", callback: () => this.refreshDashboard() });
     this.addCommand({ id: "migrate-has-filesystem", name: "Migrate has-filesystem", callback: () => this.migrateAll() });
+    this.addCommand({ id: "migrate-legacy-surveyed", name: "Migrate legacy surveyed", callback: () => this.migrateLegacySurveyedAll() });
 
     // Publish an MCP tool through vault-mcp (no-op until vault-mcp is loaded).
     this.register(
@@ -188,5 +189,21 @@ export default class JdSurveyPlugin extends Plugin {
       changed += 1;
     }
     new Notice(`jd-survey: migrated ${changed} note(s)`);
+  }
+
+  async migrateLegacySurveyedAll(): Promise<void> {
+    if (!this.guard()) return;
+    const keys = deriveKeys(this.settings.frontmatterPrefix);
+    let changed = 0;
+    for (const file of this.app.vault.getMarkdownFiles()) {
+      const fm = this.app.metadataCache.getFileCache(file)?.frontmatter ?? {};
+      const hasLegacy =
+        (keys.legacyBare !== null && Object.prototype.hasOwnProperty.call(fm, keys.legacyBare)) ||
+        keys.legacyFlat.some((k) => Object.prototype.hasOwnProperty.call(fm, k));
+      if (!hasLegacy) continue;
+      await stampFrontmatter(this.app, file, (f) => migrateLegacySurveyed(f, keys));
+      changed += 1;
+    }
+    new Notice(`jd-survey: converted ${changed} legacy surveyed note(s)`);
   }
 }
